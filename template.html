@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Coordinate Finder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="upload-container">
+    <label class="upload-label">Upload Image to Find Coordinates</label>
+    <div class="file-input-wrapper" onclick="document.getElementById('uploader').click()">
+      <input type="file" id="uploader" accept="image/*,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tiff,.ico">
+      <div class="file-input-text">
+        <svg class="file-input-icon" viewBox="0 0 24 24">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        Choose Image File
+      </div>
+    </div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <div class="instructions" id="instructions">
+    <h3>How to Use</h3>
+    <p>1. Upload an image using the button above</p>
+    <p>2. Click anywhere on the image to get coordinates</p>
+    <p>3. Coordinates will be displayed in the top-right corner</p>
+    <ul>
+      <li>Red grid lines show every 100 pixels</li>
+      <li>Coordinates are relative to the original image size</li>
+      <li>Works with any image format</li>
+    </ul>
+  </div>
+
+  <div class="coordinate-display" id="coordinateDisplay">
+    <div class="label">Coordinates:</div>
+    <div class="value" id="coordinateValue">Click on image</div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+  </div>
+
+  <script>
+    const uploader = document.getElementById('uploader');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const instructions = document.getElementById('instructions');
+    const coordinateDisplay = document.getElementById('coordinateDisplay');
+    const coordinateValue = document.getElementById('coordinateValue');
+    const loading = document.getElementById('loading');
+
+    // Show instructions after a short delay
+    setTimeout(() => {
+      instructions.classList.add('show');
+    }, 1000);
+
+    // File input is handled by inline onclick attribute
+
+    uploader.addEventListener('change', e => {
+      const file = e.target.files[0];
+      const fileText = document.querySelector('.file-input-text');
+      
+      // Update file input text
+      if (file) {
+        // Check file type
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 'image/svg+xml', 'image/tiff', 'image/x-icon'];
+        const isValidImage = validTypes.includes(file.type) || file.name.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico)$/i);
+        
+        if (!isValidImage) {
+          alert('Please select a valid image file (JPG, PNG, GIF, BMP, WebP, SVG, TIFF, ICO).');
+          // Reset the file input
+          uploader.value = '';
+          return;
+        }
+        
+        fileText.innerHTML = `
+          <svg class="file-input-icon" viewBox="0 0 24 24">
+            <path d="M9,12L11,14L15,10L20,15V19A2,2 0 0,1 18,21H6A2,2 0 0,1 4,19V5A2,2 0 0,1 6,3H14L20,9V15L15,10L11,14L9,12Z"/>
+          </svg>
+          ${file.name}
+        `;
+      } else {
+        fileText.innerHTML = `
+          <svg class="file-input-icon" viewBox="0 0 24 24">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+          </svg>
+          Choose Image File
+        `;
+        return;
+      }
+      
+      // Show loading spinner
+      loading.classList.add('show');
+      
+      const img = new Image();
+      
+      // Add error handling for unsupported images
+      img.onerror = () => {
+        loading.classList.remove('show');
+        alert('Error loading image. Please try a different image format (JPG, PNG, GIF, BMP, WebP, SVG, TIFF, ICO).');
+        coordinateValue.textContent = 'Error loading image';
+        coordinateValue.style.color = '#ff6b6b';
+      };
+      
+      img.onload = () => {
+        // Hide loading spinner
+        loading.classList.remove('show');
+        
+        // Show coordinate display
+        coordinateDisplay.classList.add('show');
+        
+        // Keep instructions visible
+        instructions.classList.add('show');
+        // Ensure image loads at full resolution
+        console.log(`Image natural size: ${img.naturalWidth}x${img.naturalHeight}`);
+        console.log(`Image display size: ${img.width}x${img.height}`);
+        
+        // Use natural dimensions for accurate coordinate calculation
+        const imgWidth = img.naturalWidth;
+        const imgHeight = img.naturalHeight;
+        
+        // Set canvas to full viewport
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Calculate scaling to fit image in canvas while maintaining aspect ratio
+        const canvasAspect = canvas.width / canvas.height;
+        const imageAspect = imgWidth / imgHeight;
+        
+        let drawWidth, drawHeight, offsetX, offsetY;
+        
+        if (imageAspect > canvasAspect) {
+          // Image is wider - fit to width
+          drawWidth = canvas.width;
+          drawHeight = canvas.width / imageAspect;
+          offsetX = 0;
+          offsetY = (canvas.height - drawHeight) / 2;
+        } else {
+          // Image is taller - fit to height
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * imageAspect;
+          offsetX = (canvas.width - drawWidth) / 2;
+          offsetY = 0;
+        }
+        
+        // Clear canvas and draw scaled image
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        
+        // Draw coordinate grid for reference (optional - can be removed)
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.lineWidth = 1;
+        
+        // Draw some reference lines every 100 pixels
+        for (let x = 0; x <= imgWidth; x += 100) {
+          const canvasX = offsetX + (x * drawWidth / imgWidth);
+          ctx.beginPath();
+          ctx.moveTo(canvasX, offsetY);
+          ctx.lineTo(canvasX, offsetY + drawHeight);
+          ctx.stroke();
+        }
+        
+        for (let y = 0; y <= imgHeight; y += 100) {
+          const canvasY = offsetY + (y * drawHeight / imgHeight);
+          ctx.beginPath();
+          ctx.moveTo(offsetX, canvasY);
+          ctx.lineTo(offsetX + drawWidth, canvasY);
+          ctx.stroke();
+        }
+        
+        // Store image info for coordinate calculation
+        canvas.imageOffsetX = offsetX;
+        canvas.imageOffsetY = offsetY;
+        canvas.imageDrawWidth = drawWidth;
+        canvas.imageDrawHeight = drawHeight;
+        canvas.imageOriginalWidth = imgWidth;
+        canvas.imageOriginalHeight = imgHeight;
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      
+      console.log('=== DEBUG INFO ===');
+      console.log(`Canvas rect: ${rect.left}, ${rect.top}, ${rect.width}, ${rect.height}`);
+      console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
+      console.log(`Click position: ${clickX}, ${clickY}`);
+      console.log(`Image offset: ${canvas.imageOffsetX}, ${canvas.imageOffsetY}`);
+      console.log(`Image draw size: ${canvas.imageDrawWidth}x${canvas.imageDrawHeight}`);
+      console.log(`Original image size: ${canvas.imageOriginalWidth}x${canvas.imageOriginalHeight}`);
+      
+      // Check if click is within the image bounds
+      if (clickX >= canvas.imageOffsetX && clickX <= canvas.imageOffsetX + canvas.imageDrawWidth &&
+          clickY >= canvas.imageOffsetY && clickY <= canvas.imageOffsetY + canvas.imageDrawHeight) {
+        
+        // Convert canvas coordinates to original image coordinates
+        const relativeX = clickX - canvas.imageOffsetX;
+        const relativeY = clickY - canvas.imageOffsetY;
+        
+        // Calculate the scale factors
+        const scaleX = canvas.imageOriginalWidth / canvas.imageDrawWidth;
+        const scaleY = canvas.imageOriginalHeight / canvas.imageDrawHeight;
+        
+        const originalX = Math.round(relativeX * scaleX);
+        const originalY = Math.round(relativeY * scaleY);
+        
+        console.log(`Relative position: ${relativeX}, ${relativeY}`);
+        console.log(`Scale factors: ${scaleX}, ${scaleY}`);
+        console.log(`Final coordinates: ${originalX}, ${originalY}`);
+        console.log(`Y-axis debug: clickY=${clickY}, imageOffsetY=${canvas.imageOffsetY}, relativeY=${relativeY}, scaleY=${scaleY}, finalY=${originalY}`);
+        
+        // Update coordinate display instead of alert
+        coordinateValue.textContent = `(${originalX}, ${originalY})`;
+        coordinateValue.style.color = '#00ff88';
+        
+        // Show brief success animation
+        coordinateDisplay.style.transform = 'translateX(0) scale(1.05)';
+        setTimeout(() => {
+          coordinateDisplay.style.transform = 'translateX(0) scale(1)';
+        }, 200);
+        
+        console.log(`Original image coordinates: (${originalX}, ${originalY})`);
+        console.log(`Image size: ${canvas.imageOriginalWidth}x${canvas.imageOriginalHeight}`);
+      } else {
+        // Update coordinate display for outside click
+        coordinateValue.textContent = 'Outside image';
+        coordinateValue.style.color = '#ff6b6b';
+      }
+    });
+  </script>
+</body>
+</html>
